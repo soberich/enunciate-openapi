@@ -27,9 +27,12 @@ import com.webcohesion.enunciate.api.datatype.Syntax;
 import dk.jyskebank.tools.enunciate.modules.openapi.ObjectTypeRenderer;
 
 public class Components {
-  private final List<Schema> schemas = new ArrayList<>();
+  private static final List<Schema> schemas = new ArrayList<>();
+
+  private static Set<Syntax> syntaxes;
 
   public Components(EnunciateLogger logger, ObjectTypeRenderer objectTypeRenderer, Set<Syntax> syntaxes) {
+    Components.syntaxes = syntaxes;
     for (Syntax syntax: syntaxes) {
       boolean syntaxIsJson = syntax.isAssignableToMediaType("application/json");
       for (Namespace namespace: syntax.getNamespaces()) {
@@ -39,12 +42,23 @@ public class Components {
       }
     }
   }
-  
+
+  public static Set<Syntax> getSyntaxes() {
+    return syntaxes;
+  }
+
   public boolean getIsEmpty() {
     return schemas.isEmpty();
   }
-  
+
+  public static boolean getIsEmptySt() {
+    return schemas.isEmpty();
+  }
+
   public List<Schema> getSchemas() {
+    return schemas;
+  }
+  public static List<Schema> getSchemasSt() {
     return schemas;
   }
 }

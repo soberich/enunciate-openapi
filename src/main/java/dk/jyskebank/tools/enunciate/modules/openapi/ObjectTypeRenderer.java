@@ -19,6 +19,7 @@ import static dk.jyskebank.tools.enunciate.modules.openapi.yaml.YamlHelper.safeY
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
+import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +29,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import javax.lang.model.element.AnnotationValue;
+import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.validation.constraints.DecimalMax;
 import javax.validation.constraints.DecimalMin;
@@ -37,6 +39,7 @@ import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 
 import com.fasterxml.jackson.core.io.JsonStringEncoder;
+import com.webcohesion.enunciate.EnunciateException;
 import com.webcohesion.enunciate.EnunciateLogger;
 import com.webcohesion.enunciate.api.datatype.BaseType;
 import com.webcohesion.enunciate.api.datatype.DataType;
@@ -49,6 +52,10 @@ import com.webcohesion.enunciate.api.datatype.Value;
 import com.webcohesion.enunciate.javac.javadoc.JavaDoc;
 import com.webcohesion.enunciate.metadata.DocumentationExample;
 
+import com.webcohesion.enunciate.modules.jackson.api.impl.PropertyImpl;
+import com.webcohesion.enunciate.modules.jackson.model.Member;
+import com.webcohesion.enunciate.modules.jaxb.model.Accessor;
+import dk.jyskebank.tools.enunciate.modules.openapi.components.Components;
 import dk.jyskebank.tools.enunciate.modules.openapi.yaml.IndentationPrinter;
 import dk.jyskebank.tools.enunciate.modules.openapi.yaml.JsonToYamlHelper;
 
@@ -209,10 +216,64 @@ public class ObjectTypeRenderer {
     private void addProperty(IndentationPrinter ip, DataType datatype, Property p, boolean syntaxIsJson) {
         logger.info(" adding property " + p.getName() + " with annotations " + p.getAnnotations().keySet());
 
+        Optional<DataType> xmlDataType = Optional.empty();
+
+        Property propertyToRenderXmlFrom = p;
+
+        if (syntaxIsJson) {
+            Element jaxbElement;
+            Element jacksonElement = null;
+            if (p instanceof com.webcohesion.enunciate.modules.jackson.api.impl.PropertyImpl) {
+                Field memberField;
+                Member member;
+                try {
+                    memberField = PropertyImpl.class.getDeclaredField("member");
+                    memberField.setAccessible(true);
+                    com.webcohesion.enunciate.modules.jackson.api.impl.PropertyImpl jacksonProperty = (com.webcohesion.enunciate.modules.jackson.api.impl.PropertyImpl) p;
+                    member = (Member) memberField.get(jacksonProperty);
+                } catch (IllegalAccessException | NoSuchFieldException e) {
+                    throw new EnunciateException(e);
+                }
+                jacksonElement = member;
+            }
+
+            if (jacksonElement != null) {
+
+                xmlDataType =
+                        Components
+                                .getSyntaxes()
+                                .stream()
+                                .filter(it -> it.isAssignableToMediaType("/xml"))
+                                .flatMap(it -> it.findDataTypes(datatype.getJavaElement().toString()).stream())
+                                .findAny();
+
+                if (xmlDataType.isPresent()) {
+                    for (Property property : xmlDataType.get().getProperties()) {
+                        if (property instanceof com.webcohesion.enunciate.modules.jaxb.api.impl.PropertyImpl) {
+                            Field accessorField;
+                            Accessor accessor;
+                            try {
+                                accessorField = com.webcohesion.enunciate.modules.jaxb.api.impl.PropertyImpl.class.getDeclaredField("accessor");
+                                accessorField.setAccessible(true);
+                                com.webcohesion.enunciate.modules.jaxb.api.impl.PropertyImpl jaxbProperty = (com.webcohesion.enunciate.modules.jaxb.api.impl.PropertyImpl) property;
+                                accessor = (Accessor) accessorField.get(jaxbProperty);
+                            } catch (IllegalAccessException | NoSuchFieldException e) {
+                                throw new EnunciateException(e);
+                            }
+                            jaxbElement = accessor;
+                            if (jaxbElement.equals(jacksonElement)) {
+                                propertyToRenderXmlFrom = property;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         ip.add("\"" + p.getName() + "\"", ":");
         ip.nextLevel();
-        if (datatype.getPropertyMetadata().containsKey("namespaceInfo")) {
-            addNamespaceXml(ip, p);
+        if (xmlDataType.orElse(datatype).getPropertyMetadata().containsKey("namespaceInfo")) {
+            addNamespaceXml(ip, propertyToRenderXmlFrom);
         }
 
         addOptionalNullable(ip, p);
@@ -360,9 +421,18 @@ public class ObjectTypeRenderer {
     }
 
     private void addOptionalXml(IndentationPrinter ip, DataType datatype) {
-        String xmlName = getNonNullAndNonEmpty(AccessorDataType.getXmlName(datatype));
 
-        Namespace namespace = datatype.getNamespace();
+        Optional<DataType> xmlDataType =
+                Components
+                        .getSyntaxes()
+                        .stream()
+                        .filter(it -> it.isAssignableToMediaType("/xml"))
+                        .flatMap(it -> it.findDataTypes(datatype.getJavaElement().toString()).stream())
+                        .findAny();
+
+        String xmlName = getNonNullAndNonEmpty(AccessorDataType.getXmlName(xmlDataType.orElse(datatype)));
+
+        Namespace namespace = xmlDataType.orElse(datatype).getNamespace();
         String xmlNamespace = getNonNullAndNonEmpty(namespace != null ? namespace.getUri() : null);
 
         logger.debug("optionalXml for " + datatype.getLabel() + " : " + xmlName + " / " + xmlNamespace);

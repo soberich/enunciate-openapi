@@ -73,9 +73,10 @@ public class OpenApiModule extends BasicGeneratingModule implements ApiFeaturePr
 
   private static final List<String> DEPENDENCY_MODULES = Arrays.asList("jackson", "jackson1", "jaxb", "jaxrs", "jaxws", "spring-web");
 
-  private ApiRegistry apiRegistry;
+  ApiRegistry apiRegistry;
   private File defaultDocsDir;
   private String defaultDocsSubdir = "ui";
+  LocalEnunciateModel localEnunciateModel;
 
   @Override
   public String getName() {
@@ -134,9 +135,9 @@ public class OpenApiModule extends BasicGeneratingModule implements ApiFeaturePr
     enunciate.addArtifact(openapiArtifact);
     
     try {
-    	LocalEnunciateModel model = new LocalEnunciateModel(context, apiRegistry);
+      localEnunciateModel = new LocalEnunciateModel(context, apiRegistry);
       
-      new OpenApiInterfaceDescription(model).writeToFolder(docsDir);
+      new OpenApiInterfaceDescription(localEnunciateModel).writeToFolder(docsDir);
     } catch (IOException e) {
       throw new EnunciateException(e);
     }

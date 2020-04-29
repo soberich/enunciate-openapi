@@ -44,9 +44,9 @@ public class RequestEntityRenderer extends Typed1ArgTemplateMethod<String, Strin
   protected String exec(String nextLineIndent) {
       IndentationPrinter ip = new IndentationPrinter(nextLineIndent, dataTypeReferenceRenderer.doRemoveObjectPrefix());
 
-      ip.add(safeYamlString(mediaWithFallback), ":");
+//      ip.add(safeYamlString(mediaWithFallback), ":");
       ip.nextLevel();
-      ip.add("schema:");
+      ip.add("  schema:");
       ip.nextLevel();
       if (hasMedia) {
         dataTypeReferenceRenderer.addSchemaRef(ip, mediaAndType.type);
